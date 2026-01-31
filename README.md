@@ -1,4 +1,4 @@
-# Autofire Speedglitch Script (Python)
+# Autofire Script
 
 A Python-based autofire / speedglitch helper that uses a controller’s right analog stick with true 8-way movements
 Designed for game *Medievil* running in **ePSXe 2.0.0**, where precise overlapping directional pulses are required.
