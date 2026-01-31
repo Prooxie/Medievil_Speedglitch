@@ -21,7 +21,7 @@ After extensive experimentation with AutoHotkey and JoyToKey, which proved unrel
 
 ## To Be Done / To Be Added
 
-[See issues!](https://github.com/Prooxie/Autofire/issues)
+[See issues!](https://github.com/Prooxie/Autofire/issues/1)
 
 ---
 
