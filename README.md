@@ -11,10 +11,17 @@ After extensive experimentation with AutoHotkey and JoyToKey, which proved unrel
 
 ## Project Status
 
+* Version: 1.1.0
 * Status: Stable
 * Platform: Windows 11
 * Input Method: Controller to Keyboard
 * Emulator Compatibility: ePSXe (tested with PS5 controller)
+
+---
+
+## To Be Done / To Be Added
+
+[See issues!](https://github.com/Prooxie/Autofire/issues)
 
 ---
 
