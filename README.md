@@ -1,11 +1,11 @@
 # Autofire Speedglitch Script (Python)
 
-A Python-based autofire / speedglitch helper that uses a controller’s right analog stick with true 8-way movement.
-Designed for games such as *Medievil* running in **ePSXe**, where precise overlapping directional pulses are required.
+A Python-based autofire / speedglitch helper that uses a controller’s right analog stick with true 8-way movements
+Designed for game *Medievil* running in **ePSXe 2.0.0**, where precise overlapping directional pulses are required.
 
 This project was designed for and tested with a **PS5 controller**.
 
-After extensive experimentation with AutoHotkey, which proved unreliable for overlapping pulses in some emulators, this Python implementation was created. Using `pygame` and `pynput`, it provides stable timing, eliminates phantom movement, and includes strong failsafes.
+After extensive experimentation with AutoHotkey and JoyToKey, which proved unreliable for overlapping pulses in **ePSXe**, this Python implementation was created. Using `pygame` and `pynput`, it provides stable timing, eliminates phantom movement, and includes strong failsafes.
 
 ---
 
@@ -13,8 +13,8 @@ After extensive experimentation with AutoHotkey, which proved unreliable for ove
 
 * Status: Stable
 * Platform: Windows 11
-* Input Method: Controller → Keyboard
-* Emulator Compatibility: ePSXe (tested)
+* Input Method: Controller to Keyboard
+* Emulator Compatibility: ePSXe (tested with PS5 controller)
 
 ---
 
@@ -34,20 +34,7 @@ After extensive experimentation with AutoHotkey, which proved unreliable for ove
 
 ---
 
-## Requirements
-
-* Python 3.9 or newer (recommended)
-* A controller with a right analog stick
-* ePSXe with D-Pad directions mapped to keyboard arrow keys
-* Required Python packages:
-
-```bash
-pip install pygame pynput
-```
-
----
-
-## Installation
+## Installation and Usage
 
 1. Install Python 3.9 or newer.
 2. Clone or download this repository.
@@ -117,28 +104,6 @@ DIAGONAL_THRESHOLD = 0.3 # Diagonal sensitivity threshold
 ### Warning
 
 Small timing adjustments can significantly affect speedglitch behavior. Change values carefully and test thoroughly.
-
----
-
-## Anti-Phantom Safeguards
-
-This script intentionally:
-
-* Releases all arrow keys multiple times
-* Inserts short delays between direction changes
-* Prevents overlapping old and new directions
-* Resets autofire state cleanly on every transition
-
-These safeguards are the primary reason this script behaves reliably in ePSXe.
-
----
-
-## Tested With
-
-* ePSXe
-* Medievil 1 NTSC version
-* DualShock-style controllers (including PS5 controller)
-* Windows 11
 
 ---
 
