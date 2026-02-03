@@ -1,42 +1,28 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
-from typing import Dict, Iterable, Set
 
-from .engine import KeyName, OutputDelta, OutputSink
-
-
-@dataclass(frozen=True)
-class KeyboardConfig:
-    """
-    Maps your abstract KeyNames to pynput Key objects.
-    """
-    pass
+from .engine import OutputDelta, OutputSink
 
 
 class PynputKeyboardSink(OutputSink):
     def __init__(self):
-        # Import inside so tests don't require pynput
         from pynput.keyboard import Key, Controller  # type: ignore
 
-        self._Key = Key
         self._keyboard = Controller()
-
-        self._keymap = {
+        self._map = {
             "up": Key.up,
             "down": Key.down,
             "left": Key.left,
             "right": Key.right,
         }
-        self._all_keys = [Key.up, Key.down, Key.left, Key.right]
+        self._all = [Key.up, Key.down, Key.left, Key.right]
 
     def _force_release_all(self) -> None:
-        # Same safety tactic as your script: multiple releases
         for _ in range(5):
-            for key in self._all_keys:
+            for k in self._all:
                 try:
-                    self._keyboard.release(key)
+                    self._keyboard.release(k)
                 except Exception:
                     pass
             time.sleep(0.01)
@@ -47,12 +33,12 @@ class PynputKeyboardSink(OutputSink):
 
         for k in delta.release:
             try:
-                self._keyboard.release(self._keymap[k])
+                self._keyboard.release(self._map[k])
             except Exception:
                 pass
 
         for k in delta.press:
             try:
-                self._keyboard.press(self._keymap[k])
+                self._keyboard.press(self._map[k])
             except Exception:
                 pass

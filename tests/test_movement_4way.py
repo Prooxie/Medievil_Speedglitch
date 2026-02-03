@@ -17,9 +17,9 @@ def test_4way_cardinals():
     assert movement_4way(ControllerState(0.0, 0.5), cfg) == frozenset({"down"})
 
 
-def test_4way_dominant_axis():
+def test_4way_dominant_axis_when_both_active():
     cfg = MovementConfig(deadzone=0.4)
-    # both exceed deadzone; x dominates
+    # x dominates
     assert movement_4way(ControllerState(0.9, -0.6), cfg) == frozenset({"right"})
     # y dominates
     assert movement_4way(ControllerState(0.6, -0.9), cfg) == frozenset({"up"})

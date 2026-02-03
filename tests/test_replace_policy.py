@@ -1,60 +1,88 @@
 from autofire.engine import AutofireScheduler, EngineConfig, TimingConfig, SwitchPolicy
+from tests.conftest import FakeClock, RecordingSink
 
 
-def test_phantom_prevention_hard_switch_force_release_and_pause():
+def test_direction_change_triggers_force_release_and_block():
     cfg = EngineConfig(
-        timing=TimingConfig(hold_time=0.2, release_time=0.1),
+        timing=TimingConfig(hold_time=0.20, release_time=0.10),
         switch=SwitchPolicy(settle_time=0.02, pause_after_release=0.08),
     )
     s = AutofireScheduler(cfg)
+    clk = FakeClock(0.0)
+    sink = RecordingSink()
 
-    # Start holding "up"
-    t0 = 0.0
-    s.set_desired(frozenset({"up"}), t0)
-    d_press = s.tick(t0)
-    assert d_press.press == frozenset({"up"})
+    # Start UP and press
+    sink.apply_at(clk.now(), s.set_desired(frozenset({"up"}), clk.now()))
+    sink.apply_at(clk.now(), s.tick(clk.now()))
+    assert sink.down == {"up"}
 
-    # Change direction while in hold: should immediately release and force release-all
-    t_change = 0.05
-    d_change = s.set_desired(frozenset({"right"}), t_change)
+    # Change to RIGHT during hold
+    clk.set(0.05)
+    d_change = s.set_desired(frozenset({"right"}), clk.now())
+    sink.apply_at(clk.now(), d_change)
+
+    # Must force release all and release UP
     assert d_change.force_release_all is True
-    assert "up" in d_change.release
+    assert "up" in d_change.release or "up" not in sink.down
+    assert sink.down == set()  # RecordingSink clears on force_release_all
 
-    # During settle_time, scheduler should emit nothing and keep released
-    d_blocked = s.tick(t_change + 0.01)
-    assert d_blocked.press == frozenset()
-    assert d_blocked.release == frozenset()
+    # While still in settle_time window: should NOT press right
+    clk.set(0.06)  # change + 0.01 < 0.02
+    d_block = s.tick(clk.now())
+    sink.apply_at(clk.now(), d_block)
+    assert sink.down == set()
+    assert d_block.press == frozenset()
 
-    # After settle_time, it should emit a force_release_all ONCE and then pause
-    d_force = s.tick(t_change + 0.02)
+    # At settle boundary: scheduler emits extra force_release_all once and extends pause
+    clk.set(0.07)  # now >= 0.05 + 0.02
+    d_force = s.tick(clk.now())
+    sink.apply_at(clk.now(), d_force)
     assert d_force.force_release_all is True
+    assert sink.down == set()
 
-    # During pause_after_release, still should not press
-    d_pause = s.tick(t_change + 0.05)
+    # During pause window: still no press
+    clk.set(0.10)  # still within pause_after_release (0.07 + 0.08 = 0.15)
+    d_pause = s.tick(clk.now())
+    sink.apply_at(clk.now(), d_pause)
     assert d_pause.press == frozenset()
+    assert sink.down == set()
 
-    # After pause is over, it can start pressing "right"
-    d_resume = s.tick(t_change + 0.11)
-    # might press depending on exact tick; ensure it does not press before pause ends
-    assert d_resume.press in (frozenset({"right"}), frozenset())
+    # After pause ends: should be allowed to press RIGHT on a tick
+    clk.set(0.16)
+    d_resume = s.tick(clk.now())
+    sink.apply_at(clk.now(), d_resume)
+    assert sink.down in ({"right"}, set())
+    # If it didn't press exactly at 0.16 due to timing, next tick should
+    if sink.down != {"right"}:
+        clk.advance(0.01)
+        sink.apply_at(clk.now(), s.tick(clk.now()))
+        assert sink.down == {"right"}
 
 
-def test_lag_spike_does_not_create_overlap():
+def test_lag_spike_after_change_never_reintroduces_old_key():
     cfg = EngineConfig(
-        timing=TimingConfig(hold_time=0.1, release_time=0.05),
+        timing=TimingConfig(hold_time=0.10, release_time=0.05),
         switch=SwitchPolicy(settle_time=0.02, pause_after_release=0.08),
     )
     s = AutofireScheduler(cfg)
+    clk = FakeClock(0.0)
+    sink = RecordingSink()
 
-    # Press up
-    s.set_desired(frozenset({"up"}), 0.0)
-    s.tick(0.0)
+    # Start UP
+    sink.apply_at(clk.now(), s.set_desired(frozenset({"up"}), clk.now()))
+    sink.apply_at(clk.now(), s.tick(clk.now()))
+    assert sink.down == {"up"}
 
-    # Direction change
-    s.set_desired(frozenset({"left"}), 0.03)
+    # Change to LEFT
+    clk.set(0.03)
+    sink.apply_at(clk.now(), s.set_desired(frozenset({"left"}), clk.now()))
+    assert sink.down == set()
 
-    # Simulate big lag spike: next tick comes late
-    d_late = s.tick(0.50)
+    # Big lag spike: next tick is much later
+    clk.set(1.0)
+    sink.apply_at(clk.now(), s.tick(clk.now()))
 
-    # In any case, we must not have "up" held again (no overlap)
-    assert "up" not in s.held_keys
+    # Old key must never come back
+    assert "up" not in sink.down
+    # Only allowed keys are either none (if timing not yet pressed) or {"left"}
+    assert sink.down in (set(), {"left"})

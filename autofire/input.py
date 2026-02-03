@@ -1,40 +1,34 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Protocol
+from typing import Protocol
 
 
 @dataclass(frozen=True)
 class ControllerState:
-    """
-    A pure snapshot of controller state.
-    You can extend this later (buttons, hats, triggers, etc.)
-    """
     axis_x: float
     axis_y: float
 
 
 class InputProvider(Protocol):
     def read(self) -> ControllerState:
-        """Return a controller snapshot (pure data)."""
         ...
 
 
-class PygameRightStickInput:
+class PygameRightStickInput(InputProvider):
     """
     Reads right stick from pygame joystick.
-    Defaults to axis 2 (x) and axis 3 (y) to match your current script.
+    Defaults axis 2 (x) and axis 3 (y) to match your current script.
     """
 
-    def __init__(self, axis_x_index: int = 2, axis_y_index: int = 3, joystick_index: int = 0):
+    def __init__(self, joystick_index: int = 0, axis_x_index: int = 2, axis_y_index: int = 3):
+        self.joystick_index = joystick_index
         self.axis_x_index = axis_x_index
         self.axis_y_index = axis_y_index
-        self.joystick_index = joystick_index
 
-        # Imported here so tests don't require pygame installed.
         import pygame  # type: ignore
-
         self.pygame = pygame
+
         pygame.init()
         pygame.joystick.init()
 

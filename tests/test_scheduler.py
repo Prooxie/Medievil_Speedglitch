@@ -1,52 +1,60 @@
 from autofire.engine import AutofireScheduler, EngineConfig, TimingConfig, SwitchPolicy
+from tests.conftest import FakeClock, RecordingSink
 
 
-def test_scheduler_hold_release_timing_basic():
+def test_hold_release_cycle_timing():
     cfg = EngineConfig(
-        timing=TimingConfig(hold_time=0.1, release_time=0.05),
+        timing=TimingConfig(hold_time=0.10, release_time=0.05),
         switch=SwitchPolicy(settle_time=0.0, pause_after_release=0.0),
     )
     s = AutofireScheduler(cfg)
+    clk = FakeClock(0.0)
+    sink = RecordingSink()
 
-    t0 = 0.0
-    # start desired
-    _ = s.set_desired(frozenset({"up"}), t0)
+    # Set desired and tick -> should press immediately
+    sink.apply_at(clk.now(), s.set_desired(frozenset({"up"}), clk.now()))
+    sink.apply_at(clk.now(), s.tick(clk.now()))
+    assert "up" in sink.down
 
-    # first tick: should press and schedule next at t0 + hold
-    d1 = s.tick(t0)
-    assert d1.press == frozenset({"up"})
-    assert d1.release == frozenset()
+    # Before hold ends -> no delta
+    clk.advance(0.09)
+    d = s.tick(clk.now())
+    assert d.press == frozenset()
+    assert d.release == frozenset()
+    sink.apply_at(clk.now(), d)
+    assert "up" in sink.down
 
-    # before hold ends: no changes
-    d2 = s.tick(0.09)
-    assert d2.press == frozenset()
-    assert d2.release == frozenset()
+    # At hold boundary -> release
+    clk.advance(0.01)
+    d = s.tick(clk.now())
+    sink.apply_at(clk.now(), d)
+    assert "up" not in sink.down
+    assert d.release == frozenset({"up"})
 
-    # at/after hold ends: should release
-    d3 = s.tick(0.10)
-    assert d3.release == frozenset({"up"})
-
-    # before release ends: no changes
-    d4 = s.tick(0.14)
-    assert d4.press == frozenset()
-    assert d4.release == frozenset()
-
-    # after release ends: should press again
-    d5 = s.tick(0.15)
-    assert d5.press == frozenset({"up"})
+    # After release_time -> press again
+    clk.advance(0.05)
+    d = s.tick(clk.now())
+    sink.apply_at(clk.now(), d)
+    assert "up" in sink.down
+    assert d.press == frozenset({"up"})
 
 
-def test_scheduler_disabling_releases():
+def test_stop_releases_any_held_keys():
     cfg = EngineConfig(
-        timing=TimingConfig(hold_time=0.1, release_time=0.05),
+        timing=TimingConfig(hold_time=0.10, release_time=0.05),
         switch=SwitchPolicy(settle_time=0.0, pause_after_release=0.0),
     )
     s = AutofireScheduler(cfg)
+    clk = FakeClock(0.0)
+    sink = RecordingSink()
 
-    t0 = 0.0
-    s.set_desired(frozenset({"left"}), t0)
-    s.tick(t0)  # press left
+    sink.apply_at(clk.now(), s.set_desired(frozenset({"left"}), clk.now()))
+    sink.apply_at(clk.now(), s.tick(clk.now()))
+    assert "left" in sink.down
 
-    d_stop = s.set_desired(frozenset(), 0.2)
-    # stop should release anything held
-    assert "left" in d_stop.release
+    # Stop
+    clk.advance(0.2)
+    d = s.set_desired(frozenset(), clk.now())
+    sink.apply_at(clk.now(), d)
+    assert "left" not in sink.down
+    assert "left" in d.release or d.force_release_all

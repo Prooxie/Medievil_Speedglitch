@@ -26,7 +26,7 @@ def test_8way_diagonals():
 
 
 def test_8way_optional_diagonal_threshold_gate():
-    # With diagonal_threshold enabled, small second-axis drift shouldn't create diagonal
+    # With diagonal_threshold enabled, small drift shouldn't create diagonal
     cfg = MovementConfig(deadzone=0.4, diagonal_threshold=0.7)
-    # x passes deadzone but y doesn't pass diagonal gate; should become dominant axis only
+    # y doesn't pass 0.7 gate -> should collapse to dominant axis (x)
     assert movement_8way(ControllerState(0.8, -0.5), cfg) == frozenset({"right"})
