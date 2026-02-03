@@ -41,7 +41,7 @@ class AutofireScheduler:
     """
     Deterministic tick-based scheduler:
     - hold/release cycling
-    - phantom prevention on direction change (stop -> force release -> pause -> resume)
+    - phantom prevention on direction change
     """
 
     def __init__(self, cfg: EngineConfig):
@@ -60,27 +60,33 @@ class AutofireScheduler:
         return frozenset(self._held)
 
     def set_desired(self, desired: FrozenSet[KeyName], now: float) -> OutputDelta:
+        # No change
         if desired == self._desired:
+            return OutputDelta(frozenset(), frozenset())
+
+        # If we are already in the "switch safety" window, update desired
+        # but DO NOT extend the block again (prevents long stalls from jitter).
+        if now < self._blocked_until or self._need_force_release:
+            self._desired = desired
             return OutputDelta(frozenset(), frozenset())
 
         # Stop cycle immediately
         self._holding_phase = False
         self._next_phase_at = now
-
         self._desired = desired
 
-        # Block briefly + force release-all once + pause
+        # Block briefly, then do ONE force_release_all in tick() and apply pause_after_release
         self._blocked_until = now + self.cfg.switch.settle_time
         self._need_force_release = True
 
-        # Immediately release any held keys
+        # Immediately release any held keys (fast, no sleeps)
         to_release = frozenset(self._held)
         self._held.clear()
 
         return OutputDelta(
             press=frozenset(),
             release=to_release,
-            force_release_all=True
+            force_release_all=False,  # do NOT do the slow loop here
         )
 
     def tick(self, now: float) -> OutputDelta:
@@ -88,7 +94,7 @@ class AutofireScheduler:
         release: Set[KeyName] = set()
         force_release_all = False
 
-        # Once settle_time has passed, do the extra force release and extend pause
+        # After settle_time: do the one-time force release and extend pause
         if self._need_force_release and now >= self._blocked_until:
             force_release_all = True
             self._need_force_release = False
@@ -113,6 +119,7 @@ class AutofireScheduler:
         if now < self._next_phase_at:
             return OutputDelta(frozenset(), frozenset(), force_release_all)
 
+        # Toggle phase
         if not self._holding_phase:
             # PRESS
             for k in self._desired:
@@ -131,3 +138,4 @@ class AutofireScheduler:
             self._next_phase_at = now + self.cfg.timing.release_time
 
         return OutputDelta(frozenset(press), frozenset(release), force_release_all)
+
