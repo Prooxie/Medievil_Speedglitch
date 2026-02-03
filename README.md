@@ -13,7 +13,7 @@ Using `pygame` and `pynput`, Autofire provides **stable timing**, **phantom-move
 
 ## Project Status
 
-* **Version:** 1.1.1 (development refactor)
+* **Version:** 1.1.2 (development refactor)
 * **Status:** Stable core, active refactor
 * **Platform:** Windows 11
 * **Input Method:** Controller to Keyboard
