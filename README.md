@@ -19,7 +19,7 @@ Using `pygame` and a virtual Xbox controller output, Autofire provides **stable 
 - **Input:** DualSense (DirectInput via pygame)
 - **Output:** Virtual Xbox 360 controller (ViGEmBus)
 - **Emulator Compatibility:** ePSXe
-- **Architecture:** Modular, testable core
+- **Architecture:** Modular
 
 > ⚠️ Note  
 > Ongoing development happens on the **`development` branch**.  
@@ -29,16 +29,10 @@ Using `pygame` and a virtual Xbox controller output, Autofire provides **stable 
 
 ## Features
 
-- True **8-way analog movement**
-  - Up, Down, Left, Right
-  - All diagonals (Up-Right, Down-Left, etc.)
+- True **analog movement**
 - Deterministic autofire system with alternating hold / release cycles
-- Tuned specifically for **speedglitch behavior**
-- **No stuck directions**
-- Immediate stop when input ceases
-- Direction changes are handled cleanly (no phantom overlaps)
+- Tuned specifically for **autofire behavior**
 - Works reliably in **ePSXe**
-- Controller remains usable (left stick + buttons still function)
 
 ---
 
@@ -69,10 +63,8 @@ Autofire is structured around strict data separation, making it easier to extend
 
 1. **Input**
    - Reads controller state (pygame)
-   - Produces pure snapshots
 2. **Mapping**
    - Deadzones, amplification, and vector logic
-   - No side effects
 3. **Engine / Scheduler**
    - Controls autofire timing
    - Handles direction changes safely
@@ -129,7 +121,6 @@ In ePSXe input configuration:
 2. Bind movement to the correct analog stick inputs
 3. Test diagonals (important for speedglitch execution)
 
-> Note: Most PS1 games do not use the right stick.  
 > Autofire works by translating the right-stick input into movement pulses that the game recognizes.
 
 ---
@@ -138,10 +129,7 @@ In ePSXe input configuration:
 
 | Action               | Behavior |
 |----------------------|----------|
-| Move left stick      | Normal movement passthrough |
 | Move right stick     | Autofire pulses in that direction |
-| Diagonal right stick | True diagonal pulses |
-| Center right stick   | Stops autofire immediately |
 | Ctrl+C               | Exit safely |
 
 ---
@@ -151,8 +139,8 @@ In ePSXe input configuration:
 Timing and sensitivity values are configurable in code:
 
 ```python
-HOLD_TIME = 0.133        # How long movement is held (seconds)
-RELEASE_TIME = 0.033     # Release duration (requested + tuned)
+HOLD_TIME = 0.128        # How long movement is held (seconds)
+RELEASE_TIME = 0.032     # Release duration (requested + tuned)
 LEFT_DEADZONE = 0.12
 RIGHT_DEADZONE = 0.25
 FULL_AT = 0.90           # 90% stick = 100% output (run threshold fix)
@@ -166,15 +154,7 @@ FULL_AT = 0.90           # 90% stick = 100% output (run threshold fix)
 
 ## Testing
 
-Autofire includes unit-testable mapping + scheduler logic.
-
-Tests do **not** require a controller or ViGEmBus.
-
-Run:
-
-```bash
-pytest
-```
+Testing removed. 
 
 ---
 
