@@ -1,75 +1,41 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import FrozenSet, Set
-
-from .input import ControllerState
 
 
 @dataclass(frozen=True)
-class MovementConfig:
-    deadzone: float = 0.4
-    diagonal_threshold: float = 0.0
+class AxisConfig:
+    deadzone: float = 0.15
+
+
+def apply_deadzone(v: tuple[float, float], deadzone: float) -> tuple[float, float]:
+    x, y = v
+    if abs(x) < deadzone:
+        x = 0.0
+    if abs(y) < deadzone:
+        y = 0.0
+    return (x, y)
+
+
+def clamp1(x: float) -> float:
+    return 1.0 if x > 1.0 else (-1.0 if x < -1.0 else x)
+
+
+def clamp2(v: tuple[float, float]) -> tuple[float, float]:
+    return (clamp1(v[0]), clamp1(v[1]))
+
+def amplify_to_full(v: tuple[float, float], full_at: float = 0.90) -> tuple[float, float]:
     """
-    If > 0, diagonals require BOTH |x| and |y| to exceed this threshold.
-    Set to 0.0 to match original deadzone-only diagonal behavior.
+    Remap so that reaching `full_at` (e.g. 0.90) outputs 1.0.
+    Example: full_at=0.90 => 0.90 -> 1.00, 0.45 -> 0.50.
     """
+    def f(x: float) -> float:
+        ax = abs(x)
+        if ax < 1e-6:
+            return 0.0
+        y = ax / full_at
+        if y > 1.0:
+            y = 1.0
+        return y if x >= 0 else -y
 
-
-def movement_4way(state: ControllerState, cfg: MovementConfig) -> FrozenSet[str]:
-    x = state.axis_x
-    y = state.axis_y
-    dz = cfg.deadzone
-
-    if abs(x) < dz and abs(y) < dz:
-        return frozenset()
-
-    # Dominant axis wins
-    if abs(x) >= abs(y):
-        if x > dz:
-            return frozenset({"right"})
-        if x < -dz:
-            return frozenset({"left"})
-        return frozenset()
-    else:
-        if y < -dz:
-            return frozenset({"up"})
-        if y > dz:
-            return frozenset({"down"})
-        return frozenset()
-
-
-def movement_8way(state: ControllerState, cfg: MovementConfig) -> FrozenSet[str]:
-    x = state.axis_x
-    y = state.axis_y
-    dz = cfg.deadzone
-
-    if abs(x) < dz and abs(y) < dz:
-        return frozenset()
-
-    keys: Set[str] = set()
-
-    # Vertical
-    if y < -dz:
-        keys.add("up")
-    elif y > dz:
-        keys.add("down")
-
-    # Horizontal
-    if x > dz:
-        keys.add("right")
-    elif x < -dz:
-        keys.add("left")
-
-    # Optional diagonal gating
-    if cfg.diagonal_threshold > 0 and len(keys) == 2:
-        if abs(x) < cfg.diagonal_threshold or abs(y) < cfg.diagonal_threshold:
-            # Drop weaker axis
-            if abs(x) >= abs(y):
-                keys.discard("up")
-                keys.discard("down")
-            else:
-                keys.discard("left")
-                keys.discard("right")
-
-    return frozenset(keys)
+    return (f(v[0]), f(v[1]))

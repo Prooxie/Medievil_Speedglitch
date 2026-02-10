@@ -1,24 +1,25 @@
 # Autofire
 
-A Python-based autofire / speedglitch helper that uses a controller’s **right analog stick** with **true 8-way movement**.
+A Python-based autofire / speedglitch helper that uses a controller’s **right analog stick** with **true 8-way movement**, while keeping the controller fully usable.
 
-Designed primarily for *Medievil* running in **ePSXe 2.0.0**, where precise overlapping directional pulses are required for speedglitch execution.
+Designed primarily for *MediEvil* running in **ePSXe 2.0.0**, where precise overlapping directional pulses are required for speedglitch execution.
 
-This project was designed for and tested with a **PS5 controller**.
+This project was designed for and tested with a **PS5 DualSense controller**.
 
-After extensive experimentation with AutoHotkey and JoyToKey (which proved unreliable for overlapping pulses in ePSXe), this Python implementation was created.  
-Using `pygame` and `pynput`, Autofire provides **stable timing**, **phantom-movement prevention**, and **strong failsafes**.
+After extensive experimentation with AutoHotkey and JoyToKey (which proved unreliable for overlapping analog pulses in ePSXe), this Python implementation was created.  
+Using `pygame` and a virtual Xbox controller output, Autofire provides **stable timing**, **phantom-movement prevention**, and **strong failsafes**.
 
 ---
 
 ## Project Status
 
-* **Version:** 1.1.2 (development refactor)
-* **Status:** Stable core, active refactor
-* **Platform:** Windows 11
-* **Input Method:** Controller to Keyboard
-* **Emulator Compatibility:** ePSXe
-* **Architecture:** Modular, testable, event-driven core
+- **Version:** 1.1.4
+- **Status:** Stable core, actively tuned
+- **Platform:** Windows 11
+- **Input:** DualSense (DirectInput via pygame)
+- **Output:** Virtual Xbox 360 controller (ViGEmBus)
+- **Emulator Compatibility:** ePSXe
+- **Architecture:** Modular, testable core
 
 > ⚠️ Note  
 > Ongoing development happens on the **`development` branch**.  
@@ -28,41 +29,57 @@ Using `pygame` and `pynput`, Autofire provides **stable timing**, **phantom-move
 
 ## Features
 
-* True **8-way analog movement**
-  * Up, Down, Left, Right
-  * All diagonals (Up-Right, Down-Left, etc.)
-* Deterministic autofire system with alternating press / release cycles
-* Tuned specifically for **speedglitch behavior**
-* Immediate stop when input ceases
-* Centering the analog stick releases all keys
-* **Anti-phantom movement safeguards**
-* Forced key releases on direction changes
-* Lag-resistant scheduling (no thread races)
-* Reliable behavior in **ePSXe**
+- True **8-way analog movement**
+  - Up, Down, Left, Right
+  - All diagonals (Up-Right, Down-Left, etc.)
+- Deterministic autofire system with alternating hold / release cycles
+- Tuned specifically for **speedglitch behavior**
+- **No stuck directions**
+- Immediate stop when input ceases
+- Direction changes are handled cleanly (no phantom overlaps)
+- Works reliably in **ePSXe**
+- Controller remains usable (left stick + buttons still function)
 
 ---
 
-## Architecture Overview (Refactor)
+## How It Works
 
-Autofire is now structured around **strict data separation**, making it easier to extend, test, and debug.
+Autofire:
+
+1. Reads controller state using `pygame`
+2. Takes the **right analog stick** as the autofire source
+3. Pulses that direction using a deterministic scheduler:
+   - Holds movement for `HOLD_TIME`
+   - Releases for `RELEASE_TIME`
+4. Outputs the result to a **virtual Xbox 360 controller** (ViGEmBus)
+
+### Movement Behavior (Current)
+
+- **Left stick** remains usable normally
+- **Right stick** produces autofire movement pulses
+- Both inputs can overlap (useful for speedglitch execution)
+
+---
+
+## Architecture Overview
+
+Autofire is structured around strict data separation, making it easier to extend, test, and debug.
 
 ### Core layers
 
 1. **Input**
-   * Reads controller state (pygame)
-   * Produces pure data snapshots
+   - Reads controller state (pygame)
+   - Produces pure snapshots
 2. **Mapping**
-   * Converts analog input into logical directions (4-way / 8-way)
-   * No side effects, fully testable
+   - Deadzones, amplification, and vector logic
+   - No side effects
 3. **Engine / Scheduler**
-   * Controls autofire timing
-   * Handles direction changes safely
-   * Prevents phantom or overlapping inputs
+   - Controls autofire timing
+   - Handles direction changes safely
 4. **Output**
-   * Emits keyboard events (pynput)
-   * Includes force-release failsafes
+   - Emits movement through a virtual controller (ViGEmBus)
 
-This design removes race conditions and makes future features (GUI, remapping, virtual controllers) feasible without rewriting the core.
+This design prevents race conditions and makes future features (GUI, remapping, profiles) feasible without rewriting the core.
 
 ---
 
@@ -70,13 +87,14 @@ This design removes race conditions and makes future features (GUI, remapping, v
 
 ### Requirements
 
-* Python **3.9+**
-* Windows (Linux/macOS support planned... Maybe)
+- Python **3.9+**
+- Windows 11
+- **ViGEmBus** installed (required for virtual Xbox controller output)
 
 ### Installation
 
 1. Clone the repository:
-   
+
 ```bash
 git clone https://github.com/Prooxie/Autofire.git
 cd Autofire
@@ -85,11 +103,13 @@ cd Autofire
 2. Install dependencies:
 
 ```bash
-pip install pygame pynput
+pip install pygame vgamepad
 ```
 
-3. Ensure your emulator controller D-PAD is mapped to keyboard arrow keys.
-4. Run the script:
+3. Install ViGEmBus  
+(Required for virtual Xbox controller output)
+
+4. Run:
 
 ```bash
 python -m autofire.app
@@ -99,98 +119,72 @@ Exit safely with **Ctrl+C**.
 
 ---
 
+## ePSXe Setup
+
+ePSXe will see an **Xbox 360 Controller** created by Autofire.
+
+In ePSXe input configuration:
+
+1. Select the virtual Xbox 360 controller
+2. Bind movement to the correct analog stick inputs
+3. Test diagonals (important for speedglitch execution)
+
+> Note: Most PS1 games do not use the right stick.  
+> Autofire works by translating the right-stick input into movement pulses that the game recognizes.
+
+---
+
 ## Controls
 
-| Action           | Behavior                                      |
-| ---------------- | --------------------------------------------- |
-| Move right stick | Starts autofire in that direction             |
-| Diagonal stick   | Fires two keys simultaneously (true diagonal) |
-| Center stick     | Stops autofire immediately                    |
-| Ctrl+C           | Exit the script safely                        |
+| Action               | Behavior |
+|----------------------|----------|
+| Move left stick      | Normal movement passthrough |
+| Move right stick     | Autofire pulses in that direction |
+| Diagonal right stick | True diagonal pulses |
+| Center right stick   | Stops autofire immediately |
+| Ctrl+C               | Exit safely |
 
 ---
-
-## How It Works
-
-* Reads right analog stick axes using `pygame`
-* Converts stick direction into keyboard arrow key inputs
-* Runs a background thread that:
-
-  * Holds keys for `HOLD_TIME`
-  * Releases keys for `RELEASE_TIME`
-
-### Direction Changes
-
-When the analog stick direction changes:
-
-1. Autofire is stopped
-2. All keys are force-released
-3. A short delay is applied
-4. The new direction starts cleanly
-
-This prevents common emulator-related issues such as:
-
-* Stuck directions
-* Phantom movement
-* Conflicting or oscillating inputs
-
----
-
 
 ## Configuration
 
-Timing and sensitivity values are configurable in code (GUI planned):
+Timing and sensitivity values are configurable in code:
 
 ```python
-HOLD_TIME = 0.133        # How long keys are held (seconds)
-RELEASE_TIME = 0.033     # Release duration
-DEADZONE = 0.4           # Analog stick deadzone
-DIAGONAL_THRESHOLD = 0.3 # Diagonal sensitivity threshold
+HOLD_TIME = 0.133        # How long movement is held (seconds)
+RELEASE_TIME = 0.033     # Release duration (requested + tuned)
+LEFT_DEADZONE = 0.12
+RIGHT_DEADZONE = 0.25
+FULL_AT = 0.90           # 90% stick = 100% output (run threshold fix)
 ```
 
-> ⚠️ Warning
-> Small timing adjustments can significantly affect speedglitch behavior. Change values carefully and test thoroughly.
+> ⚠️ Warning  
+> Small timing adjustments can significantly affect speedglitch behavior.  
+> Change values carefully and test thoroughly.
 
 ---
 
+## Testing
 
-### Testing
+Autofire includes unit-testable mapping + scheduler logic.
 
-Autofire includes unit tests covering:
+Tests do **not** require a controller or ViGEmBus.
 
-4-way and 8-way movement interpretation
+Run:
 
-Autofire timing accuracy
-
-Direction replacement policies
-
-Phantom-movement prevention
-
-Lag-spike resilience
-
-Run tests with:
-
-```python
+```bash
 pytest
 ```
-
-Tests do **not** require a controller, pygame, or pynput.
 
 ---
 
 ## Planned Features
 
-GUI + tray mode
-
-Controller monitor & diagnostics
-
-Custom mappings and profiles
-
-Virtual controller output
-
-Multi-OS support
-
-Multi-Language support
+- GUI + tray mode
+- Controller monitor & diagnostics
+- Custom profiles and per-game configs
+- Per-direction timing tuning
+- Multi-language support
 
 ---
 
@@ -198,12 +192,13 @@ Multi-Language support
 
 Script by **ProxyDarkness**
 
-https://www.youtube.com/@ProxyWasTaken / https://www.twitch.tv/ProxyDarkness
-
+https://www.youtube.com/@ProxyWasTaken  
+https://www.twitch.tv/ProxyDarkness
 
 Special thanks to **NoobKillerRoof** for sharing crucial speedglitch knowledge and testing insights.
 
-https://www.youtube.com/@NoobKillerRoof / https://www.twitch.tv/NoobKillerRoof
+https://www.youtube.com/@NoobKillerRoof  
+https://www.twitch.tv/NoobKillerRoof
 
 ---
 

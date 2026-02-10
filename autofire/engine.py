@@ -1,22 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import FrozenSet, Protocol, Set
-
-
-KeyName = str  # "up", "down", "left", "right"
 
 
 @dataclass(frozen=True)
 class TimingConfig:
-    hold_time: float = 0.133
+    hold_time: float = 0.060
     release_time: float = 0.033
 
 
 @dataclass(frozen=True)
 class SwitchPolicy:
-    settle_time: float = 0.02
-    pause_after_release: float = 0.08
+    settle_time: float = 0.0
+    pause_after_release: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -26,116 +22,75 @@ class EngineConfig:
 
 
 @dataclass(frozen=True)
-class OutputDelta:
-    press: FrozenSet[KeyName]
-    release: FrozenSet[KeyName]
-    force_release_all: bool = False
+class AxisDelta:
+    stick: tuple[float, float]
+    force_center: bool = False
 
 
-class OutputSink(Protocol):
-    def apply(self, delta: OutputDelta) -> None:
-        ...
-
-
-class AutofireScheduler:
+class AxisAutofireScheduler:
     """
-    Deterministic tick-based scheduler:
-    - hold/release cycling
-    - phantom prevention on direction change
+    Pulses a 2D stick vector:
+      - ON: output desired vector for hold_time
+      - OFF: output (0,0) for release_time
+
+    settle_time/pause_after_release are kept, but default to 0 for responsive feel.
     """
 
     def __init__(self, cfg: EngineConfig):
         self.cfg = cfg
-        self._desired: FrozenSet[KeyName] = frozenset()
+        self._desired: tuple[float, float] = (0.0, 0.0)
 
-        self._held: Set[KeyName] = set()
         self._holding_phase: bool = False
         self._next_phase_at: float = 0.0
 
         self._blocked_until: float = 0.0
-        self._need_force_release: bool = False
+        self._need_force_center: bool = False
 
-    @property
-    def held_keys(self) -> FrozenSet[KeyName]:
-        return frozenset(self._held)
-
-    def set_desired(self, desired: FrozenSet[KeyName], now: float) -> OutputDelta:
-        # No change
+    def set_desired(self, desired: tuple[float, float], now: float) -> None:
         if desired == self._desired:
-            return OutputDelta(frozenset(), frozenset())
+            return
 
-        # If we are already in the "switch safety" window, update desired
-        # but DO NOT extend the block again (prevents long stalls from jitter).
-        if now < self._blocked_until or self._need_force_release:
+        # if blocked, just store desired
+        if now < self._blocked_until or self._need_force_center:
             self._desired = desired
-            return OutputDelta(frozenset(), frozenset())
+            return
 
-        # Stop cycle immediately
+        # restart phase
         self._holding_phase = False
         self._next_phase_at = now
         self._desired = desired
 
-        # Block briefly, then do ONE force_release_all in tick() and apply pause_after_release
-        self._blocked_until = now + self.cfg.switch.settle_time
-        self._need_force_release = True
+        if self.cfg.switch.settle_time > 0:
+            self._blocked_until = now + self.cfg.switch.settle_time
+            self._need_force_center = True
 
-        # Immediately release any held keys (fast, no sleeps)
-        to_release = frozenset(self._held)
-        self._held.clear()
-
-        return OutputDelta(
-            press=frozenset(),
-            release=to_release,
-            force_release_all=False,  # do NOT do the slow loop here
-        )
-
-    def tick(self, now: float) -> OutputDelta:
-        press: Set[KeyName] = set()
-        release: Set[KeyName] = set()
-        force_release_all = False
-
-        # After settle_time: do the one-time force release and extend pause
-        if self._need_force_release and now >= self._blocked_until:
-            force_release_all = True
-            self._need_force_release = False
-            self._blocked_until = now + self.cfg.switch.pause_after_release
-
-        # While blocked, do nothing (ensures no overlap)
-        if now < self._blocked_until:
-            if self._held:
-                release |= self._held
-                self._held.clear()
-            return OutputDelta(frozenset(press), frozenset(release), force_release_all)
-
-        # If no desired keys, ensure released
-        if not self._desired:
-            if self._held:
-                release |= self._held
-                self._held.clear()
+    def tick(self, now: float) -> AxisDelta:
+        # optional force-center step after direction switch
+        if self._need_force_center and now >= self._blocked_until:
+            self._need_force_center = False
+            if self.cfg.switch.pause_after_release > 0:
+                self._blocked_until = now + self.cfg.switch.pause_after_release
             self._holding_phase = False
-            return OutputDelta(frozenset(), frozenset(release), force_release_all)
+            self._next_phase_at = now
+            return AxisDelta(stick=(0.0, 0.0), force_center=True)
 
-        # Enforce timing
+        if now < self._blocked_until:
+            return AxisDelta(stick=(0.0, 0.0), force_center=False)
+
+        # no desired => no output
+        if abs(self._desired[0]) < 1e-6 and abs(self._desired[1]) < 1e-6:
+            self._holding_phase = False
+            return AxisDelta(stick=(0.0, 0.0), force_center=False)
+
+        # time to switch phase?
         if now < self._next_phase_at:
-            return OutputDelta(frozenset(), frozenset(), force_release_all)
+            return AxisDelta(stick=self._desired if self._holding_phase else (0.0, 0.0))
 
-        # Toggle phase
         if not self._holding_phase:
-            # PRESS
-            for k in self._desired:
-                if k not in self._held:
-                    press.add(k)
-                    self._held.add(k)
             self._holding_phase = True
             self._next_phase_at = now + self.cfg.timing.hold_time
+            return AxisDelta(stick=self._desired)
         else:
-            # RELEASE
-            for k in list(self._held):
-                if k in self._desired:
-                    release.add(k)
-                    self._held.remove(k)
             self._holding_phase = False
             self._next_phase_at = now + self.cfg.timing.release_time
-
-        return OutputDelta(frozenset(press), frozenset(release), force_release_all)
-
+            return AxisDelta(stick=(0.0, 0.0))

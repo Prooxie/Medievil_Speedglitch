@@ -2,93 +2,99 @@ from __future__ import annotations
 
 import time
 
-from .engine import AutofireScheduler, EngineConfig, SwitchPolicy, TimingConfig
-from .input import PygameRightStickInput
-from .mapping import MovementConfig, movement_8way
-from .output import PynputKeyboardSink
+from .engine import AxisAutofireScheduler, EngineConfig, SwitchPolicy, TimingConfig
+from .input import PygameSingleDeviceInput
+from .mapping import AxisConfig, apply_deadzone, clamp2, amplify_to_full
+from .output import VGamepadFullPassthroughMergedLeftSink
 
 
 def main() -> int:
-    print("AUTOFIRE - With 8-way diagonals (refactored core)")
-    print("=" * 60)
+    print("Mode: Physical RIGHT stick -> Autofire -> Added onto VIRTUAL LEFT stick")
+    print(" - Physical LEFT stick remains usable (merged)")
+    print(" - Virtual LEFT = clamp(physical LEFT + autofire(physical RIGHT))")
+    print(" - Release time fixed at 33ms (requested)")
+    print("=" * 78)
 
+    # Key tweak: keep release at 33ms, reduce hold to make it feel tighter.
+    # Also remove settle/pause to avoid 'laggy' direction changes.
     engine_cfg = EngineConfig(
-        timing=TimingConfig(hold_time=0.133, release_time=0.033),
-        switch=SwitchPolicy(settle_time=0.02, pause_after_release=0.08),
+        timing=TimingConfig(hold_time=0.128, release_time=0.032), 
+        switch=SwitchPolicy(settle_time=0.0, pause_after_release=0.0),
     )
-    move_cfg = MovementConfig(deadzone=0.4, diagonal_threshold=0.0)
 
-    inp = PygameRightStickInput(joystick_index=0, axis_x_index=2, axis_y_index=3)
-    out = PynputKeyboardSink()
-    scheduler = AutofireScheduler(engine_cfg)
+    # Separate deadzones: normal left stick can be smaller; autofire source should be higher.
+    left_cfg = AxisConfig(deadzone=0.12)
+    right_cfg = AxisConfig(deadzone=0.25)
 
-    last_non_empty = frozenset()
-    last_non_empty_time = time.monotonic()
+    inp = PygameSingleDeviceInput(
+        # Python is not able to work the same as DSX.
+        device_tokens_prefer=["dualsense", "wireless controller", "xbox 360 controller", "xbox"],
+    )
 
-    CENTER_GRACE = 0.12     # was 0.07
-    CHANGE_DEBOUNCE = 0.06   # was 0.03
-    pending_desired = frozenset()
+    out = VGamepadFullPassthroughMergedLeftSink()
+    scheduler = AxisAutofireScheduler(engine_cfg)
+
+    # Anti-jitter so the pulsing doesn't stutter when crossing center.
+    # Last update: Get rid of this useless shit. Seriously. 
+    CENTER_GRACE = 0.0
+    CHANGE_DEBOUNCE = 0.0
+
+    last_non_center = (0.0, 0.0)
+    last_non_center_time = time.monotonic()
+
+    last_desired = (0.0, 0.0)
+    pending_desired = (0.0, 0.0)
     pending_since = 0.0
 
-
-    last_desired = frozenset()
-
-    print("Ready! Move RIGHT stick")
-    print("Center stick to STOP. Ctrl+C to exit safely.")
+    def is_center(v: tuple[float, float]) -> bool:
+        return abs(v[0]) < 1e-6 and abs(v[1]) < 1e-6
 
     try:
         while True:
             now = time.monotonic()
-            state = inp.read()
-            raw_desired = movement_8way(state, move_cfg)
 
-            # 1) Center grace: ignore brief center pass-through
-            if raw_desired:
-                candidate = raw_desired
-                last_non_empty = raw_desired
-                last_non_empty_time = now
+            phys = inp.read()
+
+            # Normal left stick (for passthrough/merge)
+            phys_left = apply_deadzone((phys.lx, phys.ly), left_cfg.deadzone)
+            phys_left = amplify_to_full(phys_left, full_at=0.90)
+            src = apply_deadzone((phys.rx, phys.ry), right_cfg.deadzone)
+            src = amplify_to_full(src, full_at=0.90)
+            # Center grace for source
+            if not is_center(src):
+                candidate = src
+                last_non_center = src
+                last_non_center_time = now
             else:
-                if (now - last_non_empty_time) < CENTER_GRACE:
-                    candidate = last_non_empty
-                else:
-                    candidate = frozenset()
+                candidate = last_non_center if (now - last_non_center_time) < CENTER_GRACE else (0.0, 0.0)
 
-            # 2) Debounce any change (including UP -> UP+RIGHT)
+            # Debounce direction changes a bit
             if candidate != last_desired:
                 if candidate != pending_desired:
                     pending_desired = candidate
                     pending_since = now
-
-                if (now - pending_since) >= CHANGE_DEBOUNCE:
-                    desired = pending_desired
-                else:
-                    desired = last_desired
+                desired = pending_desired if (now - pending_since) >= CHANGE_DEBOUNCE else last_desired
             else:
                 pending_desired = candidate
                 pending_since = now
                 desired = candidate
 
-            # 3) Apply desired direction to scheduler only when it truly changes
             if desired != last_desired:
-                old_dir = "+".join(sorted(last_desired)) if last_desired else "NONE"
-                new_dir = "+".join(sorted(desired)) if desired else "NONE"
-                print(f"Change: {old_dir} → {new_dir}")
-
-                out.apply(scheduler.set_desired(desired, now))
+                scheduler.set_desired(desired, now)
                 last_desired = desired
 
-            # 4) Tick scheduler every frame
-            out.apply(scheduler.tick(now))
+            delta = scheduler.tick(now)
 
-            time.sleep(0.01)
+            # Merge: virtual LEFT = clamp(phys_left + delta)
+            merged_left = clamp2((phys_left[0] + delta.stick[0], phys_left[1] + delta.stick[1]))
 
+            out.apply(phys, merged_left)
 
+            time.sleep(0.001)
 
     except KeyboardInterrupt:
-        now = time.monotonic()
-        out.apply(scheduler.set_desired(frozenset(), now))
-        out.apply(scheduler.tick(now))
         inp.close()
+        out.close()
         print("\nExiting...")
         return 0
 
