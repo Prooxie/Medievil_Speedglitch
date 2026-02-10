@@ -46,6 +46,7 @@ Autofire:
    - Holds movement for `HOLD_TIME`
    - Releases for `RELEASE_TIME`
 4. Outputs the result to a **virtual Xbox 360 controller** (ViGEmBus)
+5. 4. Outputs the result to a **virtual Xbox 360 controller** (ViGEmBus)
 
 ### Movement Behavior (Current)
 
@@ -108,6 +109,11 @@ python -m autofire.app
 ```
 
 Exit safely with **Ctrl+C**.
+
+
+5. Mapping:
+
+Map virtual right analog stick to the ePSXe left analog stick.
 
 ---
 
