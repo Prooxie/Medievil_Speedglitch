@@ -6,7 +6,7 @@ import time
 from .engine import AxisAutofireScheduler, EngineConfig, SwitchPolicy, TimingConfig
 from .input import PygameSingleDeviceInput
 from .mapping import AxisConfig, apply_deadzone, clamp2, amplify_to_full
-from .output import VGamepadFullPassthroughMergedLeftSink, VGamepadSticksOnlyMergedLeftSink
+from .output_ds4 import ViGEmDS4MergedLeftSink, ViGEmDS4SticksOnlyMergedLeftSink
 
 # Import configuration
 try:
@@ -46,15 +46,21 @@ except ImportError:
 
 def main() -> int:
     print("=" * 70)
-    print("DualSense Speed Glitch Helper for ePSXe")
+    print("DualSense Speed Glitch Helper - DS4 EDITION")
     print("=" * 70)
     print("Mode: RIGHT stick -> Autofire -> Merged into VIRTUAL LEFT stick")
     print("Physical DualSense: All buttons/triggers work normally")
-    print("Virtual Xbox 360: Left stick = autofire for speed glitch")
+    print("Virtual DualShock 4: Left stick = autofire for speed glitch")
+    print()
+    print("ADVANTAGE: Consistent button mappings!")
+    print("  Cross = Cross (not A)")
+    print("  Circle = Circle (not B)")
+    print("  Square = Square (not X)")
+    print("  Triangle = Triangle (not Y)")
     print()
     print("Setup in ePSXe:")
-    print("  1. Physical DualSense: Map movement to left stick, attacks to buttons")
-    print("  2. Virtual Xbox 360: Map left stick to attack button for speed glitch")
+    print("  1. Physical DualSense: Map normally (same as before!)")
+    print("  2. Virtual DS4: Map left stick to attack button for speed glitch")
     print("=" * 70)
     print(f"\nConfiguration:")
     print(f"  Autofire: hold={ACTIVE_AUTOFIRE.hold_time*1000:.1f}ms, release={ACTIVE_AUTOFIRE.release_time*1000:.1f}ms")
@@ -85,11 +91,11 @@ def main() -> int:
 
     # Choose output mode based on config
     if ACTIVE_OUTPUT.mode == "sticks_only":
-        out = VGamepadSticksOnlyMergedLeftSink()
+        out = ViGEmDS4SticksOnlyMergedLeftSink()
         print("Note: Using sticks-only mode. Buttons/triggers only work on physical controller.")
     else:
-        out = VGamepadFullPassthroughMergedLeftSink()
-        print("Note: Using full passthrough. All inputs mirrored to virtual controller.")
+        out = ViGEmDS4MergedLeftSink()
+        print("Note: Using full passthrough. All inputs mirrored to virtual DS4.")
     
     print()
     scheduler = AxisAutofireScheduler(engine_cfg)
